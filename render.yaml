@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: wc-leaderboard-service
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 3000
+        scope: RUN

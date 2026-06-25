@@ -1,0 +1,13 @@
+{
+  "name": "wc-leaderboard-service",
+  "version": "1.0.0",
+  "description": "Self-hosted World Cup 2026 office pool leaderboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

@@ -1,6 +1,6 @@
 # World Cup 2026 Live Leaderboard Service
 
-Self-hosted office pool leaderboard with live results from OpenLigaDB.
+Self-hosted office pool leaderboard with live results from ESPN's scoreboard API.
 
 ## Quick Start
 
@@ -21,7 +21,7 @@ Visit: `http://localhost:3000`
 - **Frontend**: `index.html` — 5 tabs (Scores, Bracket, Projections, Settings)
 - **Backend**: `server.js` — Express server with 3 endpoints
 - **State**: `state.json` — Shared pool state (scores, bracket picks, ratings)
-- **Cache**: `feed-cache.json` — 60s cached live results from OpenLigaDB
+- **Cache**: `feed-cache.json` — 60s cached live results from ESPN
 
 ## API Endpoints
 
@@ -32,15 +32,17 @@ Returns current leaderboard state (scores, winners, ratings, draft picks).
 Update leaderboard state. Body: full state object with `{scores, winners, ratings, slotOv, updatedAt}`.
 
 ### `GET /api/feed`
-Fetch live group-stage results from OpenLigaDB (free, no auth required).
+Fetch live group-stage results from ESPN's scoreboard API (free, no auth required).
+- Pulls the full group-stage window (June 11–27, 2026) in one call
+- Skips not-yet-started matches; includes live + final scores
 - Cached 60s on server
-- Returns array of finished matches with normalized team names
+- Returns array of matches with normalized team names and a `finished` flag
 - Frontend polls every 65s (respects "Live sync" toggle in Settings)
 
 ## Live Sync
 
 The "Live sync" toggle in Settings enables/disables automatic result import:
-- **On**: Poll OpenLigaDB every 65s, auto-import finished matches
+- **On**: Poll ESPN every 65s, auto-import finished matches
 - **Off**: Manual result entry only, no live feed interference
 
 Manual entries are never overwritten by live feed.

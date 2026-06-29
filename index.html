@@ -482,7 +482,7 @@
 
   const KEY='wc2026:v2', SHARED=true;
   let state={v:2,scores:{},winners:{},ratings:{},slotOv:{},updatedAt:0};
-  let storageOK=true, lastSeen=0, mem=null, liveSync=true;
+  let storageOK=true, feedOK=true, lastSeen=0, mem=null, liveSync=true;
   let st,assign,r32,part,sc,proj=null;
 
   // ---------- storage (HTTP to /api/state) ----------
@@ -705,8 +705,7 @@
   // ---------- settings ----------
   function renderSettings(){
     $('liveNote').innerHTML=
-      '<b>About live, automatic results.</b> A true zero-input, real-time feed can\'t run inside this single shareable file — a sandboxed app can\'t safely hold a sports-data API key or poll a live provider directly. The real version needs a small service that fetches the feed and that this board polls. Per your setup that service should be hosted on <span class="tag">PTX</span>, not a public host. '+
-      'Ask me to build that piece and I\'ll provide the PTX proxy plus the polling code that auto-fills scores and bracket winners here. Until then, scores are entered on the <b>Scores</b> tab and flow everywhere automatically.';
+      '<b>About live, automatic results.</b> This board now supports live ESPN sync through the small service at <code>/api/feed</code>. Make sure the local server is running and open the app from <code>http://localhost:3000</code> so live scores can be auto-imported into the board.';
     const grid=$('ratingsGrid'); if(grid.childElementCount && grid.dataset.built){ return; }
     grid.dataset.built='1';
     const rows=TEAMS.slice().sort((a,b)=>WC.ratingOf(b.name,state.ratings)-WC.ratingOf(a.name,state.ratings));
@@ -750,7 +749,7 @@
         if(state.scores[fixture.id]?.h===h && state.scores[fixture.id]?.a===a) return;
         state.scores[fixture.id]={h,a}; changed=true;
       });
-      if(changed){ recompute(); renderAll(); }
+      if(changed){ recompute(); renderAll(); await save(); }
     } catch(e){ console.log('Feed poll error:',e.message); }
   }
 
@@ -759,11 +758,12 @@
     buildRows();
     await load();
     $('storenote').textContent = storageOK
-      ? 'Live board — all changes sync instantly. Live sync polls OpenLigaDB every 60s for match results.'
+      ? 'Live board — all changes sync instantly. Live sync polls ESPN every 60s for match results.'
       : 'Server unavailable. Changes saved to browser only.';
     renderAll(); renderSaved();
-    setTimeout(runProj,400);            // first projection on load
-    setInterval(poll,65000);  // poll live feed every 65s (server caches 60s)
+    if(liveSync) poll();               // immediate poll on load
+    setTimeout(runProj,400);          // first projection on load
+    setInterval(poll,65000);          // poll live feed every 65s (server caches 60s)
   })();
 })();
 

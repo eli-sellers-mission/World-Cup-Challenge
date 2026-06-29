@@ -2,12 +2,12 @@
 
 ## What You Have
 
-A complete, self-hosted live leaderboard service for your 8-drafter World Cup office pool. Everything works on your infrastructure—no external dependencies beyond Node.js and the free OpenLigaDB sports API.
+A complete, self-hosted live leaderboard service for your 8-drafter World Cup office pool. Everything works on your infrastructure—no external dependencies beyond Node.js and the free ESPN sports API.
 
 ### ✅ Complete Features
 
 **Live Results Feed**
-- Polls OpenLigaDB every 65 seconds
+- Polls ESPN every 65 seconds
 - Auto-imports finished group stage matches
 - 60-second server-side cache (efficient)
 - Manual entries never overwritten
@@ -96,7 +96,7 @@ Returns the shared leaderboard state.
 Save changes. Frontend calls this automatically on every edit.
 
 ### GET /api/feed
-Live match results from OpenLigaDB (cached 60s).
+Live match results from ESPN (cached 60s).
 ```json
 [
   {"group": "A", "team1": "Mexico", "team2": "South Africa", "goals1": 2, "goals2": 0, "finished": true}
@@ -109,7 +109,7 @@ Live match results from OpenLigaDB (cached 60s).
 
 ### How It Works
 1. **Frontend polls** `/api/feed` every 65 seconds
-2. **Server caches** OpenLigaDB results for 60 seconds
+2. **Server caches** ESPN results for 60 seconds
 3. **Merge logic** idempotently applies finished matches:
    - Finds fixture by group + team names
    - Handles variant spellings (Korea Republic → South Korea, Côte d'Ivoire → Ivory Coast, etc.)
@@ -146,7 +146,7 @@ Live match results from OpenLigaDB (cached 60s).
 4. Turn on Live sync → auto-imports for rest of tournament
 
 ### Day 2: Live Results
-1. OpenLigaDB updates with new matches
+1. ESPN updates with new matches
 2. Server polls and caches results
 3. Frontend fetches and merges every 65s
 4. Everyone sees live scores instantly
@@ -227,10 +227,10 @@ See DEPLOYMENT.md for full configuration.
 - **Simulations**: 1000+ Monte Carlo runs to project tournament outcomes
 
 ### Sports Data
-- **Provider**: OpenLigaDB (free, no API key required)
-- **Coverage**: All 2026 World Cup matches (group + knockout)
-- **Refresh**: 30-60 second updates from official sources
-- **Reliability**: 99.9% uptime (German institution)
+- **Provider**: ESPN scoreboard API (free, no API key required; unofficial/undocumented)
+- **Coverage**: Group-stage results auto-imported; knockout entered via the bracket
+- **Refresh**: 60-second server cache, frontend polls every 65s
+- **Reliability**: Stable for years, but unofficial — no SLA; manual entry is the fallback
 
 ### State Persistence
 - **Storage**: Single JSON file (`state.json`)
@@ -276,7 +276,7 @@ PORT=3001 npm start
 | Feature | Original | New Service |
 |---------|----------|-------------|
 | **Storage** | Claude.ai window.storage | HTTP /api/state endpoint |
-| **Live Feed** | Manual entry only | Auto-poll OpenLigaDB every 65s |
+| **Live Feed** | Manual entry only | Auto-poll ESPN every 65s |
 | **Shared State** | Cloud-based artifact | File-based (self-hosted) |
 | **Deployment** | Claude.ai browser only | Self-hosted Node.js server |
 | **Live Sync Toggle** | N/A | Settings tab (new!) |
@@ -317,7 +317,7 @@ PORT=3001 npm start
 ## License & Attribution
 
 - **Scoring Logic**: Extracted from original wc2026_leaderboard.html (your work)
-- **Sports Data**: OpenLigaDB (open data, free)
+- **Sports Data**: ESPN scoreboard API (free, unofficial)
 - **Framework**: Express.js (MIT license)
 
 ---

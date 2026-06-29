@@ -156,5 +156,5 @@ PORT=3001 npm start
 ## Support
 
 - All scoring logic matches original wc2026_leaderboard.html
-- OpenLigaDB provides live 2026 WC data (no API key needed)
+- ESPN's scoreboard API provides live 2026 WC data (no API key needed)
 - 8-user shared state persists in `state.json` across server restarts

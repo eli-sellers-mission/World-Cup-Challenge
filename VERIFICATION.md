@@ -34,7 +34,7 @@ Use this checklist to verify all components are correctly installed and working.
 **Response**: `{"success": true, "updatedAt": 1704067200000}`
 
 ### GET /api/feed
-**Purpose**: Fetch live results from OpenLigaDB (cached 60s)
+**Purpose**: Fetch live results from ESPN (cached 60s)
 **Response**:
 ```json
 [
@@ -69,7 +69,7 @@ Use this checklist to verify all components are correctly installed and working.
 - Shows win probability for each team
 
 ### Settings Tab
-- **Live sync toggle** (NEW) — Auto-import results from OpenLigaDB
+- **Live sync toggle** (NEW) — Auto-import results from ESPN
 - Power ratings editor — Edit team strength ratings
 - Reset ratings button — Restore defaults
 
@@ -89,7 +89,7 @@ Use this checklist to verify all components are correctly installed and working.
 6. Never overwrite manual entries
 
 ### Example Flow
-1. OpenLigaDB: "Mexico 2 - 0 South Africa"
+1. ESPN: "Mexico 2 - 0 South Africa"
 2. Server normalizes, caches
 3. Browser polls /api/feed
 4. Matches fixture "A-0-1" (Mexico vs South Africa)
@@ -158,7 +158,7 @@ Use this checklist to verify all components are correctly installed and working.
 
 ## Team Name Normalization Examples
 
-| OpenLigaDB | Canonical |
+| ESPN | Canonical |
 |---|---|
 | Korea Republic | South Korea |
 | Côte d'Ivoire | Ivory Coast |
@@ -188,6 +188,6 @@ Use this checklist to verify all components are correctly installed and working.
 5. [ ] Access http://localhost:3000 (or configured port)
 6. [ ] Have 8 drafters open the same URL
 7. [ ] Enter initial group match results manually
-8. [ ] Toggle Live sync ON to auto-import OpenLigaDB results
+8. [ ] Toggle Live sync ON to auto-import ESPN results
 9. [ ] Make bracket picks as tournament progresses
 10. [ ] Verify leaderboard updates in real-time across all browsers

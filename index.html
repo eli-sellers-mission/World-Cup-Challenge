@@ -207,6 +207,7 @@
             <span style="font-size:14px;color:var(--text)">Live sync: <span style="color:var(--muted);font-size:12px">Auto-import results from ESPN</span></span>
           </label>
         </div>
+        <div id="liveNote" class="hint" style="margin:0 0 14px"></div>
         <div class="panel-title" style="margin:18px 0 10px">Power ratings <span style="font-weight:400;color:var(--muted2);text-transform:none;letter-spacing:0;font-family:Inter">— rough, editable estimates that drive the projections. Not official rankings.</span></div>
         <div class="setgrid" id="ratingsGrid"></div>
         <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
@@ -704,9 +705,10 @@
 
   // ---------- settings ----------
   function renderSettings(){
-    $('liveNote').innerHTML=
+    const liveNote=$('liveNote');
+    if(liveNote) liveNote.innerHTML=
       '<b>About live, automatic results.</b> This board now supports live ESPN sync through the small service at <code>/api/feed</code>. Make sure the local server is running and open the app from <code>http://localhost:3000</code> so live scores can be auto-imported into the board.';
-    const grid=$('ratingsGrid'); if(grid.childElementCount && grid.dataset.built){ return; }
+    const grid=$('ratingsGrid'); if(!grid || (grid.childElementCount && grid.dataset.built)){ return; }
     grid.dataset.built='1';
     const rows=TEAMS.slice().sort((a,b)=>WC.ratingOf(b.name,state.ratings)-WC.ratingOf(a.name,state.ratings));
     grid.innerHTML=rows.map(t=>'<div class="setrow"><span class="nm">'+t.name+'</span><input type="number" data-team="'+t.name+'" value="'+WC.ratingOf(t.name,state.ratings)+'"></div>').join('');

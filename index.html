@@ -239,7 +239,7 @@
       </div>
 
       <div class="pane" id="pane-bracket">
-        <div class="legend">This is the real FIFA bracket (matches 73–104). Round-of-32 ties seed automatically from your group tables; the eight best-third slots fill once enough groups finish. <b>Tap a team to send it through.</b> Winners flow down the tree and feed each owner's knockout points (R32 +4, R16 +6, QF +8, SF +10, Final +14, third-place +3).</div>
+        <div class="legend">This is the real FIFA bracket (matches 73–104). Round-of-32 ties seed automatically from your group tables; the eight best-third slots fill once enough groups finish. <b>Completed knockout results auto-import from ESPN</b> (penalty shootouts included) — or tap a team to send it through manually. Winners flow down the tree and feed each owner's knockout points (R32 +4, R16 +6, QF +8, SF +10, Final +14, third-place +3).</div>
         <div id="champBanner"></div>
         <div class="bracket" id="bracket"></div>
       </div>
@@ -818,18 +818,19 @@
   }
   // Still in the tournament: clinched a knockout spot and not yet eliminated.
   function isAlive(nm, elim){ return st.clinched.has(nm) && !(elim||eliminatedSet()).has(nm); }
-  function teamRemaining(nm){
+  function teamRemaining(nm, elim){
     if(!st.clinched.has(nm)) return 0;            // never made the knockouts
     let best=null,bestRank=99;
     Object.keys(part).forEach(m=>{ const p=part[m]; if(!p||state.winners[m]) return;
       if(p.a!==nm && p.b!==nm) return; const r=ROUND_OF(+m);
       if(ROUND_RANK[r]<bestRank){bestRank=ROUND_RANK[r]; best=r;} });
     if(best) return REMAINING_BY_NEXT[best];
+    if((elim||eliminatedSet()).has(nm)) return 0; // lost and out
     if(state.winners[104]===nm) return 0;         // champion — nothing left to win
     return 42;                                    // clinched but not yet placed → full R32 path
   }
-  function possibleByOwner(){ const rem={}; DRAFTERS.forEach(d=>rem[d]=0);
-    TEAMS.forEach(t=>{ rem[t.owner]+=teamRemaining(t.name); }); return rem; }
+  function possibleByOwner(){ const rem={}, elim=eliminatedSet(); DRAFTERS.forEach(d=>rem[d]=0);
+    TEAMS.forEach(t=>{ rem[t.owner]+=teamRemaining(t.name, elim); }); return rem; }
 
   // ---------- rosters (always-visible: each drafter + their teams) ----------
   function renderRosters(){
@@ -869,9 +870,11 @@
     const score=hasScore?('<span class="g-score">'+x.goals1+'–'+x.goals2+'</span>'):'<span class="g-vs">vs</span>';
     let badge,bcls;
     if(x.state==='in'){ badge=x.clock||x.detail||'LIVE'; bcls='live'; }
-    else if(x.state==='post'){ badge='FT'; bcls='ft'; }
+    else if(x.state==='post'){ badge=x.pens?'FT · pens':'FT'; bcls='ft'; }
     else { badge=fmtKick(x.startDate); bcls='pre'; }
-    let w=''; if(hasScore && x.state==='post'){ w=x.goals1>x.goals2?'a':(x.goals2>x.goals1?'b':''); }
+    // Prefer ESPN's winner flag (covers penalty shootouts); fall back to the goal line.
+    let w=''; if(x.winner){ w=x.winner===x.team1?'a':(x.winner===x.team2?'b':''); }
+    else if(hasScore && x.state==='post'){ w=x.goals1>x.goals2?'a':(x.goals2>x.goals1?'b':''); }
     return '<div class="g-row'+(x.state==='in'?' g-live':'')+'">'+
       '<div class="g-date">'+fmtDay(x.startDate)+'</div>'+
       '<div class="g-match"><span class="g-team'+(w==='a'?' g-win':'')+'">'+n1+'</span>'+score+
@@ -929,10 +932,72 @@
       return; }
     wrap.hidden=true; wrap.innerHTML='';
   }
+  // Auto-import finished knockout results from ESPN into the bracket.
+  // ESPN's winner flag already resolves penalty shootouts, so we trust g.winner.
+  // Two issues to handle: (1) best-third R32 slots are seeded ambiguously in our bracket,
+  // so we first read the real third-place assignment from each completed R32 game and pin
+  // it via slotOv; (2) once a round's winners are set the next round's participants appear,
+  // so we iterate. Each completed game is matched to the tie with the same pair of teams.
+  function seedOf(nm){ const t=teamByName[nm]; if(!t) return null; const r=st.rank[t.group]; if(!r) return null;
+    const i=r.indexOf(nm); return i===0?'W':(i===1?'R':(i===2?'3':null)); }
+  // Assign every best-third slot to a group, honouring the slots we've observed (pins) and
+  // completing the rest with a valid permutation so no group lands in two ties.
+  function assignThirdsWithPins(qualifiedGroups, pins){
+    const slots=R32.filter(x=>x.b.t==='3').map(x=>({m:x.m,allow:x.b.allow}));
+    const res={}; slots.forEach(s=>{ if(pins[s.m]!=null) res[s.m]=pins[s.m]; });
+    const used=new Set(Object.values(res));
+    const free=slots.filter(s=>res[s.m]==null);
+    const groups=qualifiedGroups.filter(g=>!used.has(g));
+    (function bt(i){ if(i===free.length) return true; const s=free[i];
+      for(const g of groups){ if(used.has(g)||s.allow.indexOf(g)<0) continue;
+        res[s.m]=g; used.add(g); if(bt(i+1)) return true; used.delete(g); delete res[s.m]; }
+      if(qualifiedGroups.length<8 && bt(i+1)) return true; return false; })(0);
+    return res;
+  }
+  function importKnockout(games){
+    const ko=games.filter(g=>!g.group && g.state==='post' && g.winner);
+    if(!ko.length) return false;
+    recompute();
+    let changed=false;
+    // (1) Read the real best-third placements from completed R32 games (every '3' slot is
+    // side b, opposite a group winner), then assign ALL '3' slots consistently — pinning only
+    // the observed ones would let a pinned group also be auto-assigned to another tie.
+    const pins={};
+    ko.filter(g=>g.round==='Round of 32').forEach(g=>{
+      const s1=seedOf(g.team1), s2=seedOf(g.team2);
+      const third = s1==='3'?g.team1 : (s2==='3'?g.team2 : null);
+      const anchor = third===g.team1?g.team2 : (third===g.team2?g.team1 : null);
+      if(!third||!anchor) return;
+      const ag=teamByName[anchor]&&teamByName[anchor].group, as=seedOf(anchor);
+      const slot=R32.find(x=>x.b.t==='3' && x.a.t===as && x.a.g===ag);
+      if(slot) pins[slot.m]=teamByName[third].group;
+    });
+    if(Object.keys(pins).length){
+      const assign=assignThirdsWithPins(st.qualifiedThirdGroups, pins);
+      Object.keys(assign).forEach(m=>{ const team=st.rank[assign[m]] && st.rank[assign[m]][2]; if(!team) return;
+        state.slotOv[m]=state.slotOv[m]||{};
+        if(state.slotOv[m].b!==team){ state.slotOv[m].b=team; changed=true; } });
+    }
+    // (2) set winners, iterating so later rounds resolve as earlier ones fill in
+    let pass=0;
+    while(pass++<8){
+      recompute();                 // refresh `part` from slotOv + winners set so far
+      let passChanged=false;
+      ko.forEach(g=>{ Object.keys(part).forEach(m=>{ const pm=part[m]; if(!pm||!pm.a||!pm.b) return;
+        const samePair=(pm.a===g.team1&&pm.b===g.team2)||(pm.a===g.team2&&pm.b===g.team1);
+        if(!samePair) return;
+        if((g.winner===pm.a||g.winner===pm.b) && state.winners[m]!==g.winner){
+          state.winners[m]=g.winner; passChanged=true; changed=true; }
+      }); });
+      if(!passChanged) break;
+    }
+    return changed;
+  }
   async function pollSchedule(){
     try{ const r=await fetch('/api/schedule'); if(!r.ok) throw new Error(r.status);
       const games=await r.json(); if(!Array.isArray(games)) return;
       renderLiveGames(games); renderSchedule(games);
+      if(storageOK && liveSync && importKnockout(games)){ renderAll(); await save(); }
     }catch(e){ console.log('Schedule poll error:',e.message); }
   }
 

@@ -185,6 +185,17 @@ app.get('/api/schedule', async (req, res) => {
         const goals1 = home.score != null && home.score !== '' ? parseInt(home.score, 10) : null;
         const goals2 = away.score != null && away.score !== '' ? parseInt(away.score, 10) : null;
 
+        // Winner — ESPN's per-competitor `winner`/`advance` flags are authoritative and
+        // already reflect penalty shootouts (e.g. a 1–1 tie where Paraguay won on pens has
+        // winner:true on Paraguay). Fall back to the goal line, then to nothing.
+        const detail = type.shortDetail || type.description || null;
+        let winner = null;
+        if (home.winner === true || home.advance === true) winner = team1;
+        else if (away.winner === true || away.advance === true) winner = team2;
+        else if (goals1 != null && goals2 != null && goals1 !== goals2) winner = goals1 > goals2 ? team1 : team2;
+        const pens = Boolean(detail && /pen/i.test(detail)) ||
+          (Array.isArray(comp.notes) && comp.notes.some(n => n && /penal/i.test(n.text || n.headline || '')));
+
         // A game is group stage iff both teams sit in the same pool. Knockout ties get
         // their round assigned below (ESPN's payload carries no reliable per-game round).
         const g1 = TEAM_GROUP[team1], g2 = TEAM_GROUP[team2];
@@ -200,7 +211,9 @@ app.get('/api/schedule', async (req, res) => {
           state: state || null,
           startDate: comp.date || ev.date || null,
           clock: status.displayClock || null,
-          detail: type.shortDetail || type.description || null,
+          detail,
+          winner: type.completed ? winner : null,
+          pens,
           finished: Boolean(type.completed)
         };
       })

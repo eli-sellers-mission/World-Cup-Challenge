@@ -72,11 +72,9 @@
     .fx+.fx{border-top:1px solid var(--line)}
     .fx .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .fx .t.l{text-align:right} .fx .t.w{color:var(--turf);font-weight:600}
-    .stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:7px;background:var(--ink2)}
-    .stepper button{border:0;background:transparent;color:var(--muted);cursor:pointer;width:20px;height:24px;font-size:14px;line-height:1}
-    .stepper button:hover{color:var(--text)}
-    .stepper .v{width:18px;text-align:center;font-variant-numeric:tabular-nums;font-size:13px;color:var(--text)}
-    .stepper .v.empty{color:var(--muted2)}
+    .fx-score{display:inline-flex;align-items:center;gap:6px;justify-content:center;min-width:46px;font-family:'Oswald',sans-serif;font-weight:700;font-size:14px;color:var(--text);font-variant-numeric:tabular-nums}
+    .fx-score.empty{color:var(--muted2);font-weight:400}
+    .fx-score .fx-dash{color:var(--muted2);font-weight:400}
 
     /* bracket */
     .bracket{display:flex;gap:18px;overflow-x:auto;padding:6px 2px 16px}
@@ -140,7 +138,7 @@
     .note{font-size:12px;color:var(--muted);line-height:1.7;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px}
     .note b{color:var(--text)} .note .tag{color:var(--gold);font-weight:600}
     select{background:var(--ink2);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:5px 7px;font-family:'Inter',sans-serif;font-size:12px;cursor:pointer;max-width:160px}
-    select:focus,.btn:focus-visible,.tab:focus-visible,.tie .side:focus-visible,.stepper button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+    select:focus,.btn:focus-visible,.tab:focus-visible,.tie .side:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
     .footer{margin-top:30px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding-top:18px}
     .foot-note{font-size:11.5px;color:var(--muted2);max-width:64ch;line-height:1.6}
 
@@ -210,7 +208,7 @@
       <div>
         <div class="eyebrow"><span class="livedot"></span> Live standings &amp; projections</div>
         <h1 class="title">Office Draft <span class="yr">'26</span></h1>
-        <div class="sub">8 drafters · 48 teams · Option A scoring · powered by real results you enter</div>
+        <div class="sub">8 drafters · 48 teams · Option A scoring · powered by live ESPN results</div>
       </div>
       <div class="saved" id="saved"></div>
     </div>
@@ -235,7 +233,7 @@
       </div>
 
       <div class="pane on" id="pane-scores">
-        <div class="legend">Enter each group result with the score steppers. <b>Win +3</b>, <b>draw +1</b> toward Option A points, and the goals also drive the live group tables — which decide who finishes top two, who grabs one of the eight best-third spots, and how the bracket seeds. Green = advancing, gold = best-third.</div>
+        <div class="legend">Group results auto-import live from ESPN — scores here are read-only. <b>Win +3</b>, <b>draw +1</b> toward Option A points, and the goals also drive the live group tables — which decide who finishes top two, who grabs one of the eight best-third spots, and how the bracket seeds. Green = advancing, gold = best-third.</div>
         <div class="grpgrid" id="grpgrid"></div>
       </div>
 
@@ -274,12 +272,34 @@
         <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn" id="resetRatings">Reset ratings</button>
         </div>
+
+        <div class="panel-title" style="margin:26px 0 10px">How the win projections work</div>
+        <div class="note">
+          The projections come from a <b>Monte Carlo simulation</b> — the rest of the tournament is played out thousands of times (1,000 / 3,000 / 8,000 sims) from the results so far, and the outcomes are averaged.
+          <ul style="margin:8px 0 0;padding-left:18px;line-height:1.8">
+            <li><b>Locked:</b> completed group matches and any knockout picks already made are held fixed in every simulation.</li>
+            <li><b>Unplayed group games:</b> goals are drawn from a Poisson model whose expected goals come from the two teams' <b>power ratings</b> (editable above).</li>
+            <li><b>Knockout games:</b> the winner is chosen by an Elo win-probability based on those same ratings.</li>
+            <li><b>Outputs:</b> how often each team advances, how often each team wins the title, and how often each drafter finishes #1 (ties are split evenly).</li>
+          </ul>
+          <div style="margin-top:8px">These are a transparent model you can tune via the power ratings — <b>not betting odds</b>.</div>
+        </div>
+
+        <div class="panel-title" style="margin:22px 0 10px">How scoring works <span style="font-weight:400;color:var(--muted2);text-transform:none;letter-spacing:0;font-family:Inter">— Option A</span></div>
+        <div class="note">
+          A drafter's total is the sum of all points earned by the teams they drafted.
+          <ul style="margin:8px 0 0;padding-left:18px;line-height:1.8">
+            <li><b>Group stage:</b> <b>Win +3</b>, <b>Draw +1</b> (each team), Loss +0.</li>
+            <li><b>Advancement:</b> <b>+3</b> for each team that reaches the knockout round — the top two of its group, or one of the eight best third-place teams.</li>
+            <li><b>Knockout wins</b> (bonus to the team that wins the match): Round of 32 <b>+4</b>, Round of 16 <b>+6</b>, Quarterfinal <b>+8</b>, Semifinal <b>+10</b>, Final <b>+14</b>.</li>
+            <li><b>Third-place playoff:</b> win <b>+3</b>.</li>
+          </ul>
+        </div>
       </div>
     </div>
 
     <div class="footer">
       <div class="foot-note" id="storenote"></div>
-      <button class="btn danger" id="resetbtn">Reset all results</button>
     </div>
   </div>
 
@@ -629,30 +649,19 @@
         tr.innerHTML='<td class="num">'+(i+1)+'</td><td class="n">'+nm+'</td><td class="num">'+r.played+'</td><td class="num">'+(r.gd>0?'+':'')+r.gd+'</td><td class="num">'+r.pts+'</td>';
         tbl.appendChild(tr); });
       box.appendChild(tbl);
-      // fixtures
+      // fixtures — read-only (group scores auto-import from ESPN; no manual editing)
       fixturesByGroup(g).forEach(f=>{ const s=state.scores[f.id]||{h:null,a:null};
-        const win = s.h!=null&&s.a!=null ? (s.h>s.a?'a':(s.h<s.a?'b':'')) : '';
+        const played = s.h!=null&&s.a!=null;
+        const win = played ? (s.h>s.a?'a':(s.h<s.a?'b':'')) : '';
         const fx=document.createElement('div'); fx.className='fx';
         fx.innerHTML=
           '<div class="t l '+(win==='a'?'w':'')+'">'+f.t1+'</div>'+
-          stepper(f.id,'h',s.h)+'<span style="color:var(--muted2)">–</span>'+stepper(f.id,'a',s.a)+
+          '<span class="fx-score'+(played?'':' empty')+'">'+(played?s.h:'·')+
+          '<span class="fx-dash">–</span>'+(played?s.a:'·')+'</span>'+
           '<div class="t '+(win==='b'?'w':'')+'">'+f.t2+'</div>';
         box.appendChild(fx); });
       wrap.appendChild(box);
     });
-    wrap.onclick=e=>{ const b=e.target.closest('button[data-fid]'); if(!b) return;
-      const fid=b.dataset.fid, side=b.dataset.k, dir=+b.dataset.d;
-      const s=state.scores[fid]||{h:null,a:null};
-      let v=s[side]; v=(v==null?0:v)+dir; if(v<0)v=0; if(v>19)v=19; s[side]=v;
-      if(s.h==null)s.h=0; if(s.a==null)s.a=0; state.scores[fid]=s;
-      renderAll(); save();
-    };
-  }
-  function stepper(fid,k,val){
-    const disp = val==null?'·':val;
-    return '<span class="stepper"><button data-fid="'+fid+'" data-k="'+k+'" data-d="-1">−</button>'+
-      '<span class="v'+(val==null?' empty':'')+'">'+disp+'</span>'+
-      '<button data-fid="'+fid+'" data-k="'+k+'" data-d="1">+</button></span>';
   }
 
   // ---------- bracket ----------
@@ -789,15 +798,6 @@
     document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
     tab.classList.add('on'); $('pane-'+tab.dataset.pane).classList.add('on');
   });
-
-  // ---------- reset (two-tap) ----------
-  const rb=$('resetbtn'); let armed=false,armT;
-  rb.onclick=async()=>{ if(!armed){ armed=true; rb.textContent='Tap again to clear everything'; rb.style.borderColor='var(--clay)'; rb.style.color='var(--clay)';
-      armT=setTimeout(()=>{armed=false;rb.textContent='Reset all results';rb.style.borderColor='';rb.style.color='';},3500); return; }
-    clearTimeout(armT); armed=false; rb.textContent='Reset all results'; rb.style.borderColor=''; rb.style.color='';
-    state={v:2,scores:{},winners:{},ratings:state.ratings,slotOv:{},updatedAt:0}; proj=null; $('projstatus').textContent='Not run yet.';
-    renderAll(); await save();
-  };
 
   // ---------- rosters (always-visible: each drafter + their teams) ----------
   function advanceState(nm){

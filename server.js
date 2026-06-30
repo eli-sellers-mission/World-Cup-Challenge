@@ -7,6 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const STATE_FILE = path.join(__dirname, 'state.json');
 const FEED_CACHE_FILE = path.join(__dirname, 'feed-cache.json');
+const SCHEDULE_CACHE_FILE = path.join(__dirname, 'schedule-cache.json');
 const CACHE_TTL = 60000; // 60s cache
 
 const TEAM_GROUP = {
@@ -49,6 +50,18 @@ function loadFeedCache() {
 
 function saveFeedCache(data) {
   fs.writeFileSync(FEED_CACHE_FILE, JSON.stringify({ fetchedAt: Date.now(), data }, null, 2));
+}
+
+function loadScheduleCache() {
+  if (fs.existsSync(SCHEDULE_CACHE_FILE)) {
+    const cached = JSON.parse(fs.readFileSync(SCHEDULE_CACHE_FILE, 'utf8'));
+    if (Date.now() - cached.fetchedAt < CACHE_TTL) return cached.data;
+  }
+  return null;
+}
+
+function saveScheduleCache(data) {
+  fs.writeFileSync(SCHEDULE_CACHE_FILE, JSON.stringify({ fetchedAt: Date.now(), data }, null, 2));
 }
 
 // GET /api/state
@@ -131,10 +144,97 @@ app.get('/api/feed', async (req, res) => {
   }
 });
 
+// Whole-tournament window: group stage (Jun 11) through the final (Jul 19, 2026).
+const ESPN_SCHEDULE_URL =
+  'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719';
+
+// GET /api/schedule - DISPLAY-ONLY feed of every game (past/live/future) across the
+// whole tournament. Unlike /api/feed it keeps 'pre' games and never touches state.json;
+// the UI derives the live banner, next-up game, and full schedule from this one payload.
+app.get('/api/schedule', async (req, res) => {
+  try {
+    const cached = loadScheduleCache();
+    if (cached) {
+      console.log('[SCHEDULE] Returning cached');
+      return res.json(cached);
+    }
+
+    console.log('[SCHEDULE] Fetching from ESPN...');
+    const response = await fetch(ESPN_SCHEDULE_URL);
+    if (!response.ok) throw new Error(`ESPN: ${response.status}`);
+    const data = await response.json();
+    const events = Array.isArray(data.events) ? data.events : [];
+
+    const games = events
+      .map(ev => {
+        const comp = ev.competitions && ev.competitions[0];
+        if (!comp || !Array.isArray(comp.competitors)) return null;
+
+        const status = comp.status || {};
+        const type = status.type || {};
+        const state = type.state; // 'pre', 'in', 'post'
+
+        const home = comp.competitors.find(c => c.homeAway === 'home');
+        const away = comp.competitors.find(c => c.homeAway === 'away');
+        if (!home || !away) return null;
+
+        const team1 = normalize(home.team && (home.team.displayName || home.team.shortDisplayName));
+        const team2 = normalize(away.team && (away.team.displayName || away.team.shortDisplayName));
+        if (!team1 || !team2) return null;
+
+        const goals1 = home.score != null && home.score !== '' ? parseInt(home.score, 10) : null;
+        const goals2 = away.score != null && away.score !== '' ? parseInt(away.score, 10) : null;
+
+        // A game is group stage iff both teams sit in the same pool. Knockout ties get
+        // their round assigned below (ESPN's payload carries no reliable per-game round).
+        const g1 = TEAM_GROUP[team1], g2 = TEAM_GROUP[team2];
+        const group = g1 && g1 === g2 ? g1 : null;
+
+        return {
+          team1,
+          team2,
+          goals1,
+          goals2,
+          group,
+          round: group ? `Group ${group}` : null,
+          state: state || null,
+          startDate: comp.date || ev.date || null,
+          clock: status.displayClock || null,
+          detail: type.shortDetail || type.description || null,
+          finished: Boolean(type.completed)
+        };
+      })
+      .filter(Boolean);
+
+    // ESPN gives no dependable round label and its calendar is empty, so derive knockout
+    // rounds from chronological order using the fixed bracket sizes. This self-corrects as
+    // ESPN publishes later ties (e.g. today only R32+R16+QF exist → 28 games).
+    const KNOCKOUT_LADDER = [
+      ['Round of 32', 16], ['Round of 16', 8], ['Quarterfinals', 4],
+      ['Semifinals', 2], ['Third place', 1], ['Final', 1]
+    ];
+    const ko = games.filter(g => !g.group)
+      .sort((a, b) => new Date(a.startDate || 0) - new Date(b.startDate || 0));
+    let i = 0;
+    for (const [label, n] of KNOCKOUT_LADDER) {
+      for (let k = 0; k < n && i < ko.length; k++, i++) ko[i].round = label;
+    }
+    for (; i < ko.length; i++) ko[i].round = 'Knockout';
+
+    saveScheduleCache(games);
+    res.json(games);
+  } catch (err) {
+    console.error('[SCHEDULE] Error:', err.message);
+    // Degrade gracefully so the UI just hides the banner / empty schedule.
+    res.json([]);
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Leaderboard running on http://localhost:${PORT}`);
-  console.log(`  /               → leaderboard UI`);
-  console.log(`  GET /api/state  → shared pool state`);
-  console.log(`  PUT /api/state  → save state`);
-  console.log(`  GET /api/feed   → live results (cached 60s)`);
+  console.log(`  /                  → leaderboard UI`);
+  console.log(`  GET /api/state     → shared pool state`);
+  console.log(`  PUT /api/state     → save state`);
+  console.log(`  GET /api/feed      → group-stage results, auto-imported (cached 60s)`);
+  console.log(`  GET /api/schedule  → full schedule, display-only (cached 60s)`);
 });

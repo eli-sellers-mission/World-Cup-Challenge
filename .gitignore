@@ -7,4 +7,5 @@ yarn-error.log*
 .env.*
 state.json
 feed-cache.json
+schedule-cache.json
 coverage/

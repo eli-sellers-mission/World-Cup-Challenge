@@ -162,17 +162,18 @@
     .rostgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
     .rostcard{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:14px 16px}
     .rostcard.leadcard{border-color:var(--gold);box-shadow:0 0 0 1px rgba(200,16,46,.18)}
-    .rostcard-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px;border-bottom:1px solid var(--line);padding-bottom:8px}
+    .rostcard-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px;border-bottom:1px solid var(--line);padding-bottom:8px}
     .rost-name{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.03em;font-size:17px;font-weight:600;display:flex;align-items:center;gap:6px}
     .rost-pts{font-family:'Oswald',sans-serif;font-weight:700;font-size:20px;color:var(--gold);font-variant-numeric:tabular-nums}
     .rost-pts small{font-size:10px;color:var(--muted2);margin-left:3px;letter-spacing:.1em;text-transform:uppercase}
+    .rost-rem{font-size:11.5px;color:var(--muted);margin:6px 0 10px} .rost-rem b{color:var(--turf);font-weight:700}
     .rost-teams{display:flex;flex-direction:column;gap:3px}
     .rost-team{display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0}
     .rost-team .rt-g{font-size:10px;color:var(--muted2);background:var(--ink2);border:1px solid var(--line);border-radius:5px;width:18px;text-align:center;flex:none}
     .rost-team .rt-n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
     .rost-team .rt-p{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px}
     .rost-team.q .rt-n{color:var(--turf);font-weight:600} .rost-team.q .rt-g{border-color:var(--turf);color:var(--turf)}
-    .rost-team.q3 .rt-n{color:var(--gold);font-weight:600} .rost-team.q3 .rt-g{border-color:var(--gold);color:var(--gold)}
+    .rost-team.out .rt-n{color:var(--muted2);text-decoration:line-through} .rost-team.out .rt-g{opacity:.45}
 
     /* full schedule */
     .sched-block{margin-bottom:18px}
@@ -604,9 +605,10 @@
     el.innerHTML='<div class="rank"></div><div class="who"><div class="nm"></div><div class="meta"></div></div><div class="pts"><span class="val">0</span><span class="lbl">pts</span></div><div class="barwrap"><div class="bar"></div></div>';
     rowEls[d]=el; board.appendChild(el); }); }
   function standingsRows(){
+    const remByOwner=possibleByOwner();
     const rows=DRAFTERS.map(d=>{ const teams=TEAMS.filter(t=>t.owner===d); let top=null,tp=-1;
       teams.forEach(t=>{const p=sc.teamPts[t.name]; if(p>tp){tp=p;top=t.name;}});
-      return {owner:d,total:sc.ownerPts[d],adv:sc.ownerAdv[d],top,topPts:tp,win:proj?proj.pool[d]:null}; });
+      return {owner:d,total:sc.ownerPts[d],adv:sc.ownerAdv[d],top,topPts:tp,rem:remByOwner[d],win:proj?proj.pool[d]:null}; });
     rows.sort((a,b)=> b.total-a.total || b.adv-a.adv || (b.win||0)-(a.win||0) || a.owner.localeCompare(b.owner));
     let rank=0,prev=null,seen=0; rows.forEach(r=>{seen++; if(prev===null||r.total!==prev){rank=seen;prev=r.total;} r.rank=rank;});
     return rows;
@@ -620,6 +622,7 @@
       el.querySelector('.nm').innerHTML=(r.rank===1&&r.total>0?'<span class="crown">🏆</span>':'')+r.owner;
       el.querySelector('.meta').innerHTML=
         '<span class="chip">Advanced <b>'+r.adv+'</b>/6</span>'+
+        (r.rem>0?'<span class="chip">Max <b>'+(r.total+r.rem)+'</b></span>':'')+
         (r.win!=null?'<span class="chip win">Win odds <b>'+pct(r.win)+'</b></span>':'')+
         (r.top&&r.topPts>0?'<span class="lead-team">Top · <b>'+r.top+'</b> ('+r.topPts+')</span>':'');
       animateNum(el.querySelector('.val'),r.total);
@@ -799,19 +802,41 @@
     tab.classList.add('on'); $('pane-'+tab.dataset.pane).classList.add('on');
   });
 
-  // ---------- rosters (always-visible: each drafter + their teams) ----------
-  function advanceState(nm){
-    const t=teamByName[nm]; if(!t||!st.rank[t.group]) return '';
-    const i=st.rank[t.group].indexOf(nm); if(i<0) return '';
-    if(i<2) return 'q';
-    if(i===2 && st.qualifiedThirdGroups.indexOf(t.group)>=0) return 'q3';
-    return '';
+  // ---------- still-alive + possible points remaining (from the bracket state) ----------
+  // Max extra points a team could still earn by winning out, keyed by its NEXT match's round.
+  const REMAINING_BY_NEXT = {R32:42,R16:38,QF:32,SF:24,F:14,'3P':3};
+  const ROUND_RANK = {R32:0,R16:1,QF:2,SF:3,'3P':4,F:5};
+  // Teams knocked out: lost a decided knockout tie and aren't still in an undecided one
+  // (the second pass keeps a semifinal loser "in" while the third-place match is pending).
+  function eliminatedSet(){
+    const elim=new Set();
+    Object.keys(part).forEach(m=>{ const p=part[m]; if(!p) return; const w=state.winners[m]; if(!w) return;
+      const loser = w===p.a?p.b : (w===p.b?p.a:null); if(loser) elim.add(loser); });
+    Object.keys(part).forEach(m=>{ const p=part[m]; if(!p||state.winners[m]) return;
+      if(p.a) elim.delete(p.a); if(p.b) elim.delete(p.b); });
+    return elim;
   }
+  // Still in the tournament: clinched a knockout spot and not yet eliminated.
+  function isAlive(nm, elim){ return st.clinched.has(nm) && !(elim||eliminatedSet()).has(nm); }
+  function teamRemaining(nm){
+    if(!st.clinched.has(nm)) return 0;            // never made the knockouts
+    let best=null,bestRank=99;
+    Object.keys(part).forEach(m=>{ const p=part[m]; if(!p||state.winners[m]) return;
+      if(p.a!==nm && p.b!==nm) return; const r=ROUND_OF(+m);
+      if(ROUND_RANK[r]<bestRank){bestRank=ROUND_RANK[r]; best=r;} });
+    if(best) return REMAINING_BY_NEXT[best];
+    if(state.winners[104]===nm) return 0;         // champion — nothing left to win
+    return 42;                                    // clinched but not yet placed → full R32 path
+  }
+  function possibleByOwner(){ const rem={}; DRAFTERS.forEach(d=>rem[d]=0);
+    TEAMS.forEach(t=>{ rem[t.owner]+=teamRemaining(t.name); }); return rem; }
+
+  // ---------- rosters (always-visible: each drafter + their teams) ----------
   function renderRosters(){
     const wrap=$('rosters'); if(!wrap) return;
-    const rows=standingsRows();
+    const rows=standingsRows(); const elim=eliminatedSet();
     let html='<div class="sec-head"><h2 class="sec-title">Rosters</h2>'+
-      '<span class="sec-sub">Every drafter and their teams · highlighted = still advancing</span></div>'+
+      '<span class="sec-sub">Every drafter and their teams · blue = still in the tournament</span></div>'+
       '<div class="rostgrid">';
     rows.forEach(r=>{
       const lead = r.rank===1 && r.total>0;
@@ -819,8 +844,12 @@
         .sort((a,b)=>(sc.teamPts[b.name]||0)-(sc.teamPts[a.name]||0) || a.name.localeCompare(b.name));
       html+='<div class="rostcard'+(lead?' leadcard':'')+'">'+
         '<div class="rostcard-h"><span class="rost-name">'+(lead?'<span class="crown">🏆</span>':'')+r.owner+'</span>'+
-        '<span class="rost-pts">'+r.total+'<small>pts</small></span></div><div class="rost-teams">';
-      teams.forEach(t=>{ const cls=advanceState(t.name); const p=sc.teamPts[t.name]||0;
+        '<span class="rost-pts">'+r.total+'<small>pts</small></span></div>'+
+        '<div class="rost-rem">'+(r.rem>0
+          ? '<b>+'+r.rem+'</b> possible · can reach <b>'+(r.total+r.rem)+'</b>'
+          : 'No points left to gain')+'</div>'+
+        '<div class="rost-teams">';
+      teams.forEach(t=>{ const cls=isAlive(t.name,elim)?'q':'out'; const p=sc.teamPts[t.name]||0;
         html+='<div class="rost-team '+cls+'"><span class="rt-g">'+t.group+'</span>'+
           '<span class="rt-n">'+t.name+'</span><span class="rt-p">'+p+'</span></div>'; });
       html+='</div></div>';
